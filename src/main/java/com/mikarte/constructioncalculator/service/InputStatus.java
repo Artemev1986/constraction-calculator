@@ -2,10 +2,8 @@ package com.mikarte.constructioncalculator.service;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
-import lombok.ToString;
 
 @AllArgsConstructor
-@ToString
 @Getter
 public enum InputStatus {
     NONE(""),
@@ -29,5 +27,5 @@ public enum InputStatus {
     INSULATION_THICKNESS("Толщина утеплителя"),
     SAND_BED_THICKNESS("Толщина песчаной подсыпки");
 
-    private String title;
+    private final String title;
 }
