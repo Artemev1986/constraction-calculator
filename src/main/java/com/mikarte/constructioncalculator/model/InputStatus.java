@@ -1,4 +1,4 @@
-package com.mikarte.constructioncalculator.service;
+package com.mikarte.constructioncalculator.model;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

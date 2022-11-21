@@ -1,6 +1,7 @@
 package com.mikarte.constructioncalculator.service;
 
 import com.mikarte.constructioncalculator.config.BotConfig;
+import com.mikarte.constructioncalculator.model.InputStatus;
 import com.mikarte.constructioncalculator.model.User;
 import com.mikarte.constructioncalculator.repository.UserRepository;
 import com.vdurmont.emoji.EmojiParser;
@@ -63,7 +64,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             Message newMessage = update.getMessage();
             long chatId = newMessage.getChatId();
 
-
             if (messageText.contains("/")) {
                 if(messageText.contains("/send") && botConfig.getOwnerId() == chatId) {
                     var users = userRepository.findAll();
@@ -125,7 +125,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private void registerUser(Message msg) {
 
-        if(userRepository.findById(msg.getChatId()).isEmpty()){
+        if (userRepository.findById(msg.getChatId()).isEmpty()) {
 
             var chatId = msg.getChatId();
             var chat = msg.getChat();
@@ -198,29 +198,35 @@ public class TelegramBot extends TelegramLongPollingBot {
         inputStatusMap.putIfAbsent(chatId, InputStatus.NONE);
 
         if (inputStatusMap.get(chatId) == InputStatus.SAND_BED_THICKNESS) {
-            exitCommandReceived(chatId, name);
-            return;
-        }
-        switch (inputStatusMap.get(chatId)) {
-            case NONE -> inputStatusMap.put(chatId, InputStatus.SLAB_PERIMETER);
-            case SLAB_PERIMETER -> inputStatusMap.put(chatId, InputStatus.SLAB_AREA_FULL);
-            case SLAB_AREA_FULL -> inputStatusMap.put(chatId, InputStatus.SLAB_AREA_BASE);
-            case SLAB_AREA_BASE -> inputStatusMap.put(chatId, InputStatus.SLAB_AREA_HEATED);
-            case SLAB_AREA_HEATED -> inputStatusMap.put(chatId, InputStatus.NUMBER_OF_AXES);
-            case NUMBER_OF_AXES -> inputStatusMap.put(chatId, InputStatus.ROUTE_LENGTH);
-            case ROUTE_LENGTH -> inputStatusMap.put(chatId, InputStatus.SEWER_RISERS);
-            case SEWER_RISERS -> inputStatusMap.put(chatId, InputStatus.DRAW_OFF_POINTS);
-            case DRAW_OFF_POINTS -> inputStatusMap.put(chatId, InputStatus.CABLE_ENTRY);
-            case CABLE_ENTRY -> inputStatusMap.put(chatId, InputStatus.GROUND);
-            case GROUND -> inputStatusMap.put(chatId, InputStatus.LENGTH_OUTSIDE_WALL);
-            case LENGTH_OUTSIDE_WALL -> inputStatusMap.put(chatId, InputStatus.LENGTH_INSIDE_WALL);
-            case LENGTH_INSIDE_WALL -> inputStatusMap.put(chatId, InputStatus.PLATE_RIB_WIDTH);
-            case PLATE_RIB_WIDTH -> inputStatusMap.put(chatId, InputStatus.RIB_VOLUME);
-            case RIB_VOLUME -> inputStatusMap.put(chatId, InputStatus.PIT_AREA);
-            case PIT_AREA -> inputStatusMap.put(chatId, InputStatus.PIT_DEPTH);
-            case PIT_DEPTH -> inputStatusMap.put(chatId, InputStatus.BLIND_AREA);
-            case BLIND_AREA -> inputStatusMap.put(chatId, InputStatus.INSULATION_THICKNESS);
-            case INSULATION_THICKNESS -> inputStatusMap.put(chatId, InputStatus.SAND_BED_THICKNESS);
+            InputStatus validStatus = validateData(chatId, data);
+            if (validStatus == InputStatus.NONE) {
+                exitCommandReceived(chatId, name);
+                return;
+            } else {
+                inputStatusMap.put(chatId, validStatus);
+            }
+        } else {
+            switch (inputStatusMap.get(chatId)) {
+                case NONE -> inputStatusMap.put(chatId, InputStatus.SLAB_PERIMETER);
+                case SLAB_PERIMETER -> inputStatusMap.put(chatId, InputStatus.SLAB_AREA_FULL);
+                case SLAB_AREA_FULL -> inputStatusMap.put(chatId, InputStatus.SLAB_AREA_BASE);
+                case SLAB_AREA_BASE -> inputStatusMap.put(chatId, InputStatus.SLAB_AREA_HEATED);
+                case SLAB_AREA_HEATED -> inputStatusMap.put(chatId, InputStatus.NUMBER_OF_AXES);
+                case NUMBER_OF_AXES -> inputStatusMap.put(chatId, InputStatus.ROUTE_LENGTH);
+                case ROUTE_LENGTH -> inputStatusMap.put(chatId, InputStatus.SEWER_RISERS);
+                case SEWER_RISERS -> inputStatusMap.put(chatId, InputStatus.DRAW_OFF_POINTS);
+                case DRAW_OFF_POINTS -> inputStatusMap.put(chatId, InputStatus.CABLE_ENTRY);
+                case CABLE_ENTRY -> inputStatusMap.put(chatId, InputStatus.GROUND);
+                case GROUND -> inputStatusMap.put(chatId, InputStatus.LENGTH_OUTSIDE_WALL);
+                case LENGTH_OUTSIDE_WALL -> inputStatusMap.put(chatId, InputStatus.LENGTH_INSIDE_WALL);
+                case LENGTH_INSIDE_WALL -> inputStatusMap.put(chatId, InputStatus.PLATE_RIB_WIDTH);
+                case PLATE_RIB_WIDTH -> inputStatusMap.put(chatId, InputStatus.RIB_VOLUME);
+                case RIB_VOLUME -> inputStatusMap.put(chatId, InputStatus.PIT_AREA);
+                case PIT_AREA -> inputStatusMap.put(chatId, InputStatus.PIT_DEPTH);
+                case PIT_DEPTH -> inputStatusMap.put(chatId, InputStatus.BLIND_AREA);
+                case BLIND_AREA -> inputStatusMap.put(chatId, InputStatus.INSULATION_THICKNESS);
+                case INSULATION_THICKNESS -> inputStatusMap.put(chatId, InputStatus.SAND_BED_THICKNESS);
+            }
         }
 
         Float tempValue = data.get(chatId).get(inputStatusMap.get(chatId));
@@ -277,5 +283,37 @@ public class TelegramBot extends TelegramLongPollingBot {
         message.setChatId(chatId);
         message.setText(textToSend);
         executeMessage(message);
+    }
+
+    private InputStatus validateData(long chatId, Map<Long, Map<InputStatus, Float>> data) {
+        for (InputStatus status: InputStatus.values()) {
+            if (status != InputStatus.NONE) {
+                if (data.get(chatId).get(status) == null) {
+                    String textMessage = "Значение параметра \"" + status.getTitle() +
+                            "\" не должно быть пустым" + ":warning:";
+                    sendMessage(chatId, EmojiParser.parseToUnicode(textMessage));
+                    return status;
+                }
+                if (data.get(chatId).get(status) <= 0) {
+                    String textMessage = "Значение параметра \"" + status.getTitle() +
+                            "\" должно быть больше нуля" + ":warning:";
+                    sendMessage(chatId, EmojiParser.parseToUnicode(textMessage));
+                    return status;
+                }
+            }
+        }
+        if (data.get(chatId).get(InputStatus.SLAB_AREA_FULL)  < data.get(chatId).get(InputStatus.SLAB_AREA_BASE)) {
+            String textMessage = "Значение параметра \"" + InputStatus.SLAB_AREA_FULL.getTitle() +
+                    "\" должно быть не меньше параметра \"" + InputStatus.SLAB_AREA_BASE.getTitle() + "\"" + ":warning:";
+            sendMessage(chatId, EmojiParser.parseToUnicode(textMessage));
+            return InputStatus.SLAB_AREA_FULL;
+        }
+        if (data.get(chatId).get(InputStatus.SLAB_AREA_BASE) < data.get(chatId).get(InputStatus.SLAB_AREA_HEATED)) {
+            String textMessage = "Значение параметра \"" + InputStatus.SLAB_AREA_BASE.getTitle() +
+                    "\" должно быть не меньше параметра \"" + InputStatus.SLAB_AREA_HEATED.getTitle() + "\"" + ":warning:";
+            sendMessage(chatId, EmojiParser.parseToUnicode(textMessage));
+            return InputStatus.SLAB_AREA_BASE;
+        }
+        return InputStatus.NONE;
     }
 }
