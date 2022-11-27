@@ -29,12 +29,16 @@ public class Questionnaire {
     private Float drawOffPoints;
     private Float cableEntry;
     private Float ground;
+    @Transient
     private Float lengthOutsideWall;
     private Float lengthInsideWall;
     private Float plateRibWidth;
+    @Transient
     private Float ribVolume;
+    @Transient
     private Float pitArea;
     private Float pitDepth;
+    @Transient
     private Float blindArea;
     private Float insulationThickness;
     private Float sandBedThickness;

@@ -6,11 +6,16 @@ import com.mikarte.constructioncalculator.model.User;
 import com.mikarte.constructioncalculator.repository.UserRepository;
 import com.vdurmont.emoji.EmojiParser;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.api.methods.GetFile;
 import org.telegram.telegrambots.meta.api.methods.commands.SetMyCommands;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.Document;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.commands.BotCommand;
@@ -19,6 +24,9 @@ import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMa
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -120,15 +128,17 @@ public class TelegramBot extends TelegramLongPollingBot {
                     exitCommandReceived(chatId, update.getCallbackQuery().getMessage().getChat().getFirstName());
                 }
             }
+        } else if (update.getMessage().hasDocument()) {
+            createUnitPrice(update.getMessage());
         }
     }
 
-    private void registerUser(Message msg) {
+    private void registerUser(Message message) {
 
-        if (userRepository.findById(msg.getChatId()).isEmpty()) {
+        if (userRepository.findById(message.getChatId()).isEmpty()) {
 
-            var chatId = msg.getChatId();
-            var chat = msg.getChat();
+            var chatId = message.getChatId();
+            var chat = message.getChat();
 
             User user = new User();
 
@@ -140,6 +150,43 @@ public class TelegramBot extends TelegramLongPollingBot {
 
             userRepository.save(user);
             log.info("user saved: " + user);
+        }
+    }
+
+    private void createUnitPrice(Message message) {
+        String docId = message.getDocument().getFileId();
+        String docName = message.getDocument().getFileName();
+        String docMine = message.getDocument().getMimeType();
+        long docSize = message.getDocument().getFileSize();
+
+        Document document = new Document();
+        document.setMimeType(docMine);
+        document.setFileName(docName);
+        document.setFileSize(docSize);
+        document.setFileId(docId);
+
+        GetFile getFile = new GetFile();
+        getFile.setFileId(document.getFileId());
+        String filePath;
+        File file = null;
+        try {
+            filePath = execute(getFile).getFilePath();
+            file = downloadFile(filePath);
+        } catch (TelegramApiException e) {
+            log.error(ERROR_TEXT + e.getMessage());
+        }
+
+        try {
+            assert file != null;
+            FileInputStream inputStream = new FileInputStream(file);
+            Workbook workbook = new XSSFWorkbook(inputStream);
+            Sheet sheet = workbook.getSheet("Лист1");
+            int firstRow = sheet.getFirstRowNum();
+            int cellNum = sheet.getRow(firstRow).getFirstCellNum();
+            log.info("{}",sheet.getRow(firstRow).getCell(cellNum).getNumericCellValue());
+            inputStream.close();
+        } catch (IOException e) {
+            log.error(ERROR_TEXT + e.getMessage());
         }
     }
 
@@ -217,14 +264,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                 case SEWER_RISERS -> inputStatusMap.put(chatId, InputStatus.DRAW_OFF_POINTS);
                 case DRAW_OFF_POINTS -> inputStatusMap.put(chatId, InputStatus.CABLE_ENTRY);
                 case CABLE_ENTRY -> inputStatusMap.put(chatId, InputStatus.GROUND);
-                case GROUND -> inputStatusMap.put(chatId, InputStatus.LENGTH_OUTSIDE_WALL);
-                case LENGTH_OUTSIDE_WALL -> inputStatusMap.put(chatId, InputStatus.LENGTH_INSIDE_WALL);
+                case GROUND -> inputStatusMap.put(chatId, InputStatus.LENGTH_INSIDE_WALL);
                 case LENGTH_INSIDE_WALL -> inputStatusMap.put(chatId, InputStatus.PLATE_RIB_WIDTH);
-                case PLATE_RIB_WIDTH -> inputStatusMap.put(chatId, InputStatus.RIB_VOLUME);
-                case RIB_VOLUME -> inputStatusMap.put(chatId, InputStatus.PIT_AREA);
-                case PIT_AREA -> inputStatusMap.put(chatId, InputStatus.PIT_DEPTH);
-                case PIT_DEPTH -> inputStatusMap.put(chatId, InputStatus.BLIND_AREA);
-                case BLIND_AREA -> inputStatusMap.put(chatId, InputStatus.INSULATION_THICKNESS);
+                case PLATE_RIB_WIDTH -> inputStatusMap.put(chatId, InputStatus.PIT_DEPTH);
+                case PIT_DEPTH -> inputStatusMap.put(chatId, InputStatus.INSULATION_THICKNESS);
                 case INSULATION_THICKNESS -> inputStatusMap.put(chatId, InputStatus.SAND_BED_THICKNESS);
             }
         }

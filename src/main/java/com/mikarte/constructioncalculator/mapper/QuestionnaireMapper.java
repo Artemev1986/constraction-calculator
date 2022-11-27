@@ -22,13 +22,14 @@ public class QuestionnaireMapper {
         questionnaire.setDrawOffPoints(data.get(InputStatus.DRAW_OFF_POINTS));
         questionnaire.setCableEntry(data.get(InputStatus.CABLE_ENTRY));
         questionnaire.setGround(data.get(InputStatus.GROUND));
-        questionnaire.setLengthOutsideWall(data.get(InputStatus.LENGTH_OUTSIDE_WALL));
+        questionnaire.setLengthOutsideWall(data.get(InputStatus.SLAB_PERIMETER));
         questionnaire.setLengthInsideWall(data.get(InputStatus.LENGTH_INSIDE_WALL));
         questionnaire.setPlateRibWidth(data.get(InputStatus.PLATE_RIB_WIDTH));
-        questionnaire.setRibVolume(data.get(InputStatus.RIB_VOLUME));
-        questionnaire.setPitArea(data.get(InputStatus.PIT_AREA));
+        questionnaire.setRibVolume((data.get(InputStatus.SLAB_PERIMETER) + data.get(InputStatus.LENGTH_INSIDE_WALL)) *
+                data.get(InputStatus.PLATE_RIB_WIDTH) * 0.1f);
+        questionnaire.setPitArea(data.get(InputStatus.SLAB_PERIMETER) + data.get(InputStatus.SLAB_AREA_FULL) + 10);
         questionnaire.setPitDepth(data.get(InputStatus.PIT_DEPTH));
-        questionnaire.setBlindArea(data.get(InputStatus.BLIND_AREA));
+        questionnaire.setBlindArea(data.get(InputStatus.SLAB_PERIMETER) + 4);
         questionnaire.setInsulationThickness(data.get(InputStatus.INSULATION_THICKNESS));
         questionnaire.setSandBedThickness(data.get(InputStatus.SAND_BED_THICKNESS));
         questionnaire.setCreatedOn(LocalDateTime.now());
