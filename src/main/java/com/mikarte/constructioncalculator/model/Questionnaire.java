@@ -16,9 +16,7 @@ public class Questionnaire {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "customer_id")
-    private User customer;
+    private Long chatId;
     private Float slabPerimeter;
     private Float slabAreaFull;
     private Float slabAreaBase;
@@ -43,4 +41,20 @@ public class Questionnaire {
     private Float insulationThickness;
     private Float sandBedThickness;
     private LocalDateTime createdOn;
+
+    public float getLengthOutsideWall() {
+        return slabPerimeter;
+    }
+
+    public float getRibVolume() {
+        return (slabPerimeter + lengthInsideWall) * plateRibWidth * 0.1f;
+    }
+
+    public float getPitArea() {
+        return slabPerimeter + slabAreaFull + 10;
+    }
+
+    public float getBlindArea() {
+        return slabPerimeter + 4;
+    }
 }

@@ -1,14 +1,15 @@
 package com.mikarte.constructioncalculator.service;
 
 import com.mikarte.constructioncalculator.config.BotConfig;
-import com.mikarte.constructioncalculator.model.InputStatus;
-import com.mikarte.constructioncalculator.model.User;
-import com.mikarte.constructioncalculator.repository.UserRepository;
+import com.mikarte.constructioncalculator.mapper.*;
+import com.mikarte.constructioncalculator.model.*;
+import com.mikarte.constructioncalculator.repository.*;
 import com.vdurmont.emoji.EmojiParser;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.orm.jpa.JpaObjectRetrievalFailureException;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.GetFile;
@@ -27,6 +28,7 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -36,17 +38,41 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private final BotConfig botConfig;
     private final UserRepository userRepository;
+    private final MainPriceRepository mainPriceRepository;
+    private final CommunicationPriceRepository communicationPriceRepository;
+    private final ConcretePriceRepository concretePriceRepository;
+    private final AdditionalPriceRepository additionalPriceRepository;
+    private final QuestionnaireRepository questionnaireRepository;
+    private final FullPriceRepository fullPriceRepository;
     private final Map<Long, Map<InputStatus, Float>> data = new HashMap<>();
     private final Map<Long, InputStatus> inputStatusMap = new HashMap<>();
+    private final Map<KeyMainWorking, Float> mainWorkMap = new HashMap<>();
+    private final Map<KeyCommunicationWorking, Float> communicationWorkMap = new HashMap<>();
+    private final Map<KeyConcreteWorking, Float> concreteWorkMap = new HashMap<>();
+    private final Map<KeyAdditionalWorkAndEquipment, Float> additionalWorkMap = new HashMap<>();
     static final String ERROR_TEXT = "Error occurred: ";
     private final StringBuilder savedMessage = new StringBuilder();
 
-    public TelegramBot(BotConfig botConfig, UserRepository userRepository) {
+    public TelegramBot(BotConfig botConfig,
+                       UserRepository userRepository,
+                       MainPriceRepository mainPriceRepository,
+                       CommunicationPriceRepository communicationPriceRepository,
+                       ConcretePriceRepository concretePriceRepository,
+                       AdditionalPriceRepository additionalPriceRepository,
+                       QuestionnaireRepository questionnaireRepository,
+                       FullPriceRepository fullPriceRepository) {
         this.botConfig = botConfig;
         this.userRepository = userRepository;
+        this.mainPriceRepository = mainPriceRepository;
+        this.communicationPriceRepository = communicationPriceRepository;
+        this.concretePriceRepository = concretePriceRepository;
+        this.additionalPriceRepository = additionalPriceRepository;
+        this.questionnaireRepository = questionnaireRepository;
+        this.fullPriceRepository = fullPriceRepository;
         List<BotCommand> listOfCommands = Arrays.asList(
-                new BotCommand("/start", "get a welcome message"),
-                new BotCommand("/inputdata", "Input data"));
+                new BotCommand("/start", "получить приветствие"),
+                new BotCommand("/inputdata", "ввод данных"),
+                new BotCommand("/getworkingprice", "рассчёт стоимости работ"));
         try {
             this.execute(new SetMyCommands(listOfCommands, new BotCommandScopeDefault(), null));
         } catch (TelegramApiException e) {
@@ -86,6 +112,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                                 newMessage.getChat().getFirstName(), newMessage);
                         case "/inputdata" ->
                                 addDataCommandReceived(chatId, newMessage.getChat().getFirstName());
+                        case "/getworkingprice" -> calculateSumWorking(chatId);
                         default -> {
                             sendMessage(chatId, "Sorry, command not recognized");
                             log.info("Replied to user: {}", newMessage.getChat().getFirstName());
@@ -129,7 +156,10 @@ public class TelegramBot extends TelegramLongPollingBot {
                 }
             }
         } else if (update.getMessage().hasDocument()) {
-            createUnitPrice(update.getMessage());
+            long chatId = update.getMessage().getChatId();
+            if (botConfig.getOwnerId() == chatId) {
+                createUnitPrice(update.getMessage());
+            }
         }
     }
 
@@ -153,7 +183,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         }
     }
 
-    private void createUnitPrice(Message message) {
+    public void createUnitPrice(Message message) {
         String docId = message.getDocument().getFileId();
         String docName = message.getDocument().getFileName();
         String docMine = message.getDocument().getMimeType();
@@ -181,13 +211,85 @@ public class TelegramBot extends TelegramLongPollingBot {
             FileInputStream inputStream = new FileInputStream(file);
             Workbook workbook = new XSSFWorkbook(inputStream);
             Sheet sheet = workbook.getSheet("Лист1");
-            int firstRow = sheet.getFirstRowNum();
+            int firstRow = sheet.getFirstRowNum() + 1;
             int cellNum = sheet.getRow(firstRow).getFirstCellNum();
-            log.info("{}",sheet.getRow(firstRow).getCell(cellNum).getNumericCellValue());
+            int i = 0;
+            for (KeyMainWorking key: KeyMainWorking.values()) {
+                float value = (float) sheet.getRow(firstRow + i).getCell(cellNum + 2).getNumericCellValue();
+                mainWorkMap.put(key, value);
+                i++;
+            }
+
+            for (KeyCommunicationWorking key: KeyCommunicationWorking.values()) {
+                float value = (float) sheet.getRow(firstRow + i).getCell(cellNum + 2).getNumericCellValue();
+                communicationWorkMap.put(key, value);
+                i++;
+            }
+
+            for (KeyConcreteWorking key: KeyConcreteWorking.values()) {
+                float value = (float) sheet.getRow(firstRow + i).getCell(cellNum + 2).getNumericCellValue();
+                concreteWorkMap.put(key, value);
+                i++;
+            }
+
+            for (KeyAdditionalWorkAndEquipment key: KeyAdditionalWorkAndEquipment.values()) {
+                float value = (float) sheet.getRow(firstRow + i).getCell(cellNum + 2).getNumericCellValue();
+                additionalWorkMap.put(key, value);
+                i++;
+            }
             inputStream.close();
+
+
+            MainPrice mainPrice = MainPriceMapper.toMainPriceFromMap(mainWorkMap);
+            CommunicationPrice communicationPrice = CommunicationPriceMapper.toCommunicationPriceFromMap(communicationWorkMap);
+            ConcretePrice concretePrice = ConcretePriceMapper.toConcretePriceFromMap(concreteWorkMap);
+            AdditionalPrice additionalPrice = AdditionalPriceMapper.toAdditionalPriceFromMap(additionalWorkMap);
+
+            mainPriceRepository.save(mainPrice);
+            communicationPriceRepository.save(communicationPrice);
+            concretePriceRepository.save(concretePrice);
+            additionalPriceRepository.save(additionalPrice);
+
+            FullPrice fullPrice = FullPriceMapper.toFullPriceFromMap(
+                    mainWorkMap,
+                    communicationWorkMap,
+                    concreteWorkMap,
+                    additionalWorkMap);
+            fullPriceRepository.save(fullPrice);
         } catch (IOException e) {
             log.error(ERROR_TEXT + e.getMessage());
         }
+    }
+
+    private void calculateSumWorking(long chatId) {
+        FullPrice fullPrice;
+        Questionnaire questionnaire;
+        try {
+            fullPrice = fullPriceRepository.getById(1L);
+        } catch (JpaObjectRetrievalFailureException e) {
+            sendMessage(chatId, "отсутствуют данные о ценах за единицу");
+            log.error(ERROR_TEXT + e.getMessage());
+            return;
+        }
+
+        try {
+            questionnaire = questionnaireRepository.findFirstByChatIdOrderByIdDesc(chatId);
+        } catch (JpaObjectRetrievalFailureException e) {
+            sendMessage(chatId, "нет вводных данных");
+            log.error(ERROR_TEXT + e.getMessage());
+            return;
+        }
+            float sum = Calculator.totalSumWorking(
+                    fullPrice.getMainPrice(),
+                    fullPrice.getCommunicationPrice(),
+                    fullPrice.getConcretePrice(),
+                    fullPrice.getAdditionalPrice(),
+                    questionnaire);
+
+        Locale locale = new Locale("ru");
+        NumberFormat format = NumberFormat.getInstance(locale);
+        String answer = " Общая стоимость работ = " + format.format(sum) + " руб.";
+        sendMessage(chatId, answer);
     }
 
     private void checkData(long chatId) {
@@ -247,6 +349,9 @@ public class TelegramBot extends TelegramLongPollingBot {
         if (inputStatusMap.get(chatId) == InputStatus.SAND_BED_THICKNESS) {
             InputStatus validStatus = validateData(chatId, data);
             if (validStatus == InputStatus.NONE) {
+                Questionnaire questionnaire =
+                        QuestionnaireMapper.toQuestionnaireFromMap(data.get(chatId), chatId);
+                questionnaireRepository.save(questionnaire);
                 exitCommandReceived(chatId, name);
                 return;
             } else {

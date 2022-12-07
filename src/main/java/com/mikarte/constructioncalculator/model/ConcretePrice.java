@@ -10,10 +10,9 @@ import javax.persistence.*;
 @Setter
 @ToString
 @Entity
-@Table
-public class ConcreteWorkingPrice {
+@Table(name = "concrete_price")
+public class ConcretePrice {
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private Float formworkAssemblyDisassembly;
     private Float installationFormworkSteps;
@@ -22,4 +21,16 @@ public class ConcreteWorkingPrice {
     private Float concreting;
     private Float polesForTerrace;
     private Float concreteGrinding;
+
+    public float getSum() {
+        float sum = 0;
+        sum += formworkAssemblyDisassembly;
+        sum += installationFormworkSteps;
+        sum += ribReinforcement;
+        sum += slabReinforcement;
+        sum += concreting;
+        sum += polesForTerrace;
+        sum += concreteGrinding;
+        return sum;
+    }
 }
