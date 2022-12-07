@@ -7,6 +7,6 @@ import lombok.Getter;
 @Getter
 public enum Button {
     NEXT("Следующий параметр"),
-    EXIT("Завершить ввод данных");
+    EXIT("Прервать ввод данных");
     private final String title;
 }
